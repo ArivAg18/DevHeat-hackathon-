@@ -1,0 +1,36 @@
+from fastapi import FastAPI, WebSocket
+from pydantic import BaseModel
+import openai
+
+app = FastAPI()
+openai.api_key = "your_openai_api_key"  # Replace with your OpenAI API Key
+
+class UserInput(BaseModel):
+    job_role: str
+    experience_level: str
+
+@app.post("/generate_question")
+def generate_question(user_input: UserInput):
+    prompt = f"Generate an interview question for a {user_input.experience_level} {user_input.job_role}."
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "system", "content": prompt}]
+    )
+    return {"question": response["choices"][0]["message"]["content"]}
+
+@app.post("/analyze_answer")
+def analyze_answer(answer: str):
+    feedback_prompt = f"Analyze the following interview response and provide constructive feedback: {answer}"
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "system", "content": feedback_prompt}]
+    )
+    return {"feedback": response["choices"][0]["message"]["content"]}
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        response = generate_question(UserInput(**eval(data)))
+        await websocket.send_json(response)
